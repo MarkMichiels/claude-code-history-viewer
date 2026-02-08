@@ -44,6 +44,20 @@ app.on('window-all-closed', () => {
   }
 });
 
+// File watcher state
+let currentWatcher = null;
+let watchedFilePath = null;
+let lastLineCount = 0;
+
+function stopWatching() {
+  if (currentWatcher) {
+    currentWatcher.close();
+    currentWatcher = null;
+    watchedFilePath = null;
+    lastLineCount = 0;
+  }
+}
+
 // IPC handlers for reading session data
 ipcMain.handle('get-sessions', async () => {
   try {
@@ -141,6 +155,65 @@ ipcMain.handle('get-sessions', async () => {
   } catch (error) {
     return { error: error.message };
   }
+});
+
+// Watch a session file for changes and send new messages to renderer
+ipcMain.handle('watch-session', async (event, sessionId, projectDir) => {
+  stopWatching();
+
+  const configPath = getClaudeConfigPath();
+  const projectsPath = path.join(configPath, 'projects');
+  const sessionPath = path.join(projectsPath, projectDir, `${sessionId}.jsonl`);
+
+  if (!fs.existsSync(sessionPath)) {
+    return { error: 'Session file not found' };
+  }
+
+  // Set initial line count
+  const content = fs.readFileSync(sessionPath, 'utf-8');
+  const lines = content.trim().split('\n').filter(line => line.trim());
+  lastLineCount = lines.length;
+  watchedFilePath = sessionPath;
+
+  // Debounce timer to avoid multiple rapid updates
+  let debounceTimer = null;
+
+  currentWatcher = fs.watch(sessionPath, (eventType) => {
+    if (eventType === 'change') {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        try {
+          const newContent = fs.readFileSync(watchedFilePath, 'utf-8');
+          const newLines = newContent.trim().split('\n').filter(line => line.trim());
+
+          if (newLines.length > lastLineCount) {
+            // Parse only the new lines
+            const addedLines = newLines.slice(lastLineCount);
+            lastLineCount = newLines.length;
+
+            const newMessages = addedLines.map(line => {
+              try { return JSON.parse(line); } catch (e) { return null; }
+            }).filter(msg => msg !== null);
+
+            // Send new messages to all renderer windows
+            const wins = BrowserWindow.getAllWindows();
+            wins.forEach(win => {
+              win.webContents.send('live-messages', { sessionId, messages: newMessages });
+            });
+          }
+        } catch (e) {
+          console.error('Error reading watched file:', e);
+        }
+      }, 300);
+    }
+  });
+
+  return { watching: true, lineCount: lastLineCount };
+});
+
+ipcMain.handle('stop-watching', async () => {
+  stopWatching();
+  return { stopped: true };
 });
 
 ipcMain.handle('get-session-details', async (event, sessionId, projectDir) => {
