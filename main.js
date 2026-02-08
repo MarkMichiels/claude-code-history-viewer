@@ -171,6 +171,7 @@ ipcMain.handle('get-session-details', async (event, sessionId, projectDir) => {
         if (msg.type === 'user') {
           // Extract content - it might be a string or an array
           let content = '';
+          let toolResults = [];
           if (typeof msg.message.content === 'string') {
             content = msg.message.content;
           } else if (Array.isArray(msg.message.content)) {
@@ -178,6 +179,26 @@ ipcMain.handle('get-session-details', async (event, sessionId, projectDir) => {
               .filter(block => block.type === 'text')
               .map(block => block.text)
               .join('\n\n');
+            toolResults = msg.message.content
+              .filter(block => block.type === 'tool_result')
+              .map(block => ({
+                tool_use_id: block.tool_use_id,
+                content: typeof block.content === 'string' ? block.content :
+                  Array.isArray(block.content) ? block.content
+                    .filter(c => c.type === 'text')
+                    .map(c => c.text)
+                    .join('\n') : '',
+                is_error: block.is_error || false
+              }));
+          }
+
+          // Skip messages that are only tool results (show them inline with assistant)
+          if (!content && toolResults.length > 0) {
+            return {
+              role: 'tool_result',
+              toolResults: toolResults,
+              timestamp: msg.timestamp
+            };
           }
 
           return {
@@ -186,13 +207,27 @@ ipcMain.handle('get-session-details', async (event, sessionId, projectDir) => {
             timestamp: msg.timestamp
           };
         } else if (msg.type === 'assistant') {
-          // Extract text content from assistant messages
+          // Extract all content types from assistant messages
           let content = '';
+          let thinking = '';
+          let toolUses = [];
+
           if (Array.isArray(msg.message.content)) {
             content = msg.message.content
               .filter(block => block.type === 'text')
               .map(block => block.text)
               .join('\n\n');
+            thinking = msg.message.content
+              .filter(block => block.type === 'thinking')
+              .map(block => block.thinking || block.text || '')
+              .join('\n\n');
+            toolUses = msg.message.content
+              .filter(block => block.type === 'tool_use')
+              .map(block => ({
+                id: block.id,
+                name: block.name,
+                input: block.input || {}
+              }));
           } else if (typeof msg.message.content === 'string') {
             content = msg.message.content;
           }
@@ -200,13 +235,14 @@ ipcMain.handle('get-session-details', async (event, sessionId, projectDir) => {
           return {
             role: 'assistant',
             content: content,
+            thinking: thinking,
             timestamp: msg.timestamp,
-            toolUses: msg.message.content?.filter(block => block.type === 'tool_use') || []
+            toolUses: toolUses
           };
         }
         return null;
       })
-      .filter(msg => msg !== null && msg.content);
+      .filter(msg => msg !== null && (msg.content || msg.toolUses?.length > 0 || msg.toolResults?.length > 0));
 
     return { messages: formattedMessages };
   } catch (error) {

@@ -379,25 +379,191 @@ body {
   background: #4a4a4a;
 }
 
-/* Tool Use Indicator */
-.tool-uses {
-  margin-top: 12px;
-  padding: 12px;
-  background: #242424;
+/* Thinking Block */
+.thinking-block {
+  margin-bottom: 12px;
   border-radius: 8px;
+  background: #2a2518;
   border-left: 3px solid #f59e0b;
+  overflow: hidden;
 }
 
-.tool-use-title {
+.thinking-header {
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+
+.thinking-header:hover {
+  background: #332e1f;
+}
+
+.thinking-label {
   font-size: 12px;
   color: #f59e0b;
   font-weight: 600;
-  margin-bottom: 8px;
 }
 
-.tool-use-item {
+.thinking-content {
+  display: none;
+}
+
+.thinking-pre {
+  margin: 0;
+  padding: 12px 16px;
+  background: #1e1b12;
+  color: #c0a86e;
   font-size: 12px;
-  color: #999;
-  padding: 4px 0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 400px;
+  overflow-y: auto;
+  border: none;
+}
+
+/* Tool Use Blocks */
+.tool-uses {
+  margin-top: 8px;
+}
+
+.tool-use-block {
+  margin-bottom: 4px;
+  border-radius: 6px;
+  background: #1e1e2e;
+  border-left: 3px solid #c77dff;
+  overflow: hidden;
+}
+
+.tool-use-header {
+  padding: 6px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+  min-height: 32px;
+}
+
+.tool-use-header:hover {
+  background: #252538;
+}
+
+.tool-name {
+  font-size: 12px;
+  color: #c77dff;
+  font-weight: 600;
   font-family: 'Monaco', 'Menlo', monospace;
+  flex-shrink: 0;
+}
+
+.tool-summary {
+  font-size: 11px;
+  color: #888;
+  font-family: 'Monaco', 'Menlo', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.tool-use-detail {
+  display: none;
+}
+
+.tool-input-pre {
+  margin: 0;
+  padding: 10px 16px;
+  background: #16162a;
+  color: #b0b0e0;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+  border: none;
+  border-top: 1px solid #2a2a4a;
+}
+
+/* Tool Result */
+.tool-result {
+  border-top: 1px solid #2a2a3a;
+}
+
+.tool-result-header {
+  padding: 4px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+  background: #1a2a1a;
+}
+
+.tool-result-error .tool-result-header {
+  background: #2a1a1a;
+}
+
+.tool-result-header:hover {
+  background: #1e321e;
+}
+
+.tool-result-error .tool-result-header:hover {
+  background: #321e1e;
+}
+
+.tool-result-label {
+  font-size: 11px;
+  color: #6dbf6d;
+  font-weight: 600;
+}
+
+.tool-result-error .tool-result-label {
+  color: #ff6b6b;
+}
+
+.tool-result-size {
+  font-size: 10px;
+  color: #666;
+  margin-left: auto;
+}
+
+.tool-result-content {
+  display: none;
+}
+
+.tool-output-pre {
+  margin: 0;
+  padding: 10px 16px;
+  background: #121e12;
+  color: #a0c0a0;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 400px;
+  overflow-y: auto;
+  border: none;
+}
+
+.tool-result-error .tool-output-pre {
+  background: #1e1212;
+  color: #e0a0a0;
+}
+
+/* Collapse icon */
+.collapse-icon {
+  font-size: 10px;
+  color: #666;
+  width: 12px;
+  flex-shrink: 0;
+}
+
+/* Collapsible sections */
+.collapsible {
+  display: none;
 }

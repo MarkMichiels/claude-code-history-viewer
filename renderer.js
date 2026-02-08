@@ -149,8 +149,20 @@ async function loadSessionDetails(sessionId, projectDir) {
       </div>
     `;
 
-    // Render messages
-    chatContainer.innerHTML = result.messages.map(msg => {
+    // Build a lookup of tool results by tool_use_id
+    const toolResultMap = new Map();
+    result.messages.forEach(msg => {
+      if (msg.role === 'tool_result' && msg.toolResults) {
+        msg.toolResults.forEach(tr => {
+          toolResultMap.set(tr.tool_use_id, tr);
+        });
+      }
+    });
+
+    // Render messages (skip standalone tool_result messages, they're shown inline)
+    chatContainer.innerHTML = result.messages
+      .filter(msg => msg.role !== 'tool_result')
+      .map(msg => {
       let contentHtml = '';
 
       // Process content with markdown
@@ -158,16 +170,93 @@ async function loadSessionDetails(sessionId, projectDir) {
         contentHtml = marked.parse(msg.content);
       }
 
-      // Add tool use information if present
-      let toolUsesHtml = '';
-      if (msg.toolUses && msg.toolUses.length > 0) {
-        const toolNames = msg.toolUses.map(tool => tool.name).join(', ');
-        toolUsesHtml = `
-          <div class="tool-uses">
-            <div class="tool-use-title">🔧 Tools used:</div>
-            <div class="tool-use-item">${escapeHtml(toolNames)}</div>
+      // Render thinking block if present
+      let thinkingHtml = '';
+      if (msg.thinking) {
+        const thinkingId = 'thinking-' + Math.random().toString(36).substr(2, 9);
+        thinkingHtml = `
+          <div class="thinking-block">
+            <div class="thinking-header" onclick="toggleCollapsible('${thinkingId}')">
+              <span class="collapse-icon" id="icon-${thinkingId}">▶</span>
+              <span class="thinking-label">💭 Thinking</span>
+            </div>
+            <div class="thinking-content collapsible" id="${thinkingId}">
+              <pre class="thinking-pre">${escapeHtml(msg.thinking)}</pre>
+            </div>
           </div>
         `;
+      }
+
+      // Render tool uses with input and results
+      let toolUsesHtml = '';
+      if (msg.toolUses && msg.toolUses.length > 0) {
+        toolUsesHtml = msg.toolUses.map(tool => {
+          const toolId = 'tool-' + Math.random().toString(36).substr(2, 9);
+          const resultId = 'result-' + Math.random().toString(36).substr(2, 9);
+          const toolResult = toolResultMap.get(tool.id);
+
+          // Format tool input based on tool type
+          let inputSummary = '';
+          let inputDetail = '';
+          if (tool.name === 'Bash') {
+            inputSummary = (tool.input.command || '').substring(0, 120);
+            inputDetail = tool.input.command || '';
+          } else if (tool.name === 'Read') {
+            inputSummary = tool.input.file_path || '';
+            inputDetail = JSON.stringify(tool.input, null, 2);
+          } else if (tool.name === 'Write' || tool.name === 'Edit') {
+            inputSummary = tool.input.file_path || '';
+            inputDetail = JSON.stringify(tool.input, null, 2);
+          } else if (tool.name === 'Grep') {
+            inputSummary = `"${tool.input.pattern || ''}" ${tool.input.path || ''}`;
+            inputDetail = JSON.stringify(tool.input, null, 2);
+          } else if (tool.name === 'Glob') {
+            inputSummary = tool.input.pattern || '';
+            inputDetail = JSON.stringify(tool.input, null, 2);
+          } else if (tool.name === 'Task') {
+            inputSummary = tool.input.description || '';
+            inputDetail = tool.input.prompt ? tool.input.prompt.substring(0, 500) : JSON.stringify(tool.input, null, 2);
+          } else {
+            inputSummary = Object.values(tool.input).join(', ').substring(0, 100);
+            inputDetail = JSON.stringify(tool.input, null, 2);
+          }
+
+          // Render result if available
+          let resultHtml = '';
+          if (toolResult) {
+            const resultContent = toolResult.content || '';
+            const truncated = resultContent.length > 500;
+            const isError = toolResult.is_error;
+            resultHtml = `
+              <div class="tool-result ${isError ? 'tool-result-error' : ''}">
+                <div class="tool-result-header" onclick="toggleCollapsible('${resultId}')">
+                  <span class="collapse-icon" id="icon-${resultId}">▶</span>
+                  <span class="tool-result-label">${isError ? '❌ Error' : '✅ Result'}</span>
+                  <span class="tool-result-size">${resultContent.length > 1024 ? (resultContent.length / 1024).toFixed(0) + ' KB' : resultContent.length + ' chars'}</span>
+                </div>
+                <div class="tool-result-content collapsible" id="${resultId}">
+                  <pre class="tool-output-pre">${escapeHtml(resultContent)}</pre>
+                </div>
+              </div>
+            `;
+          }
+
+          return `
+            <div class="tool-use-block">
+              <div class="tool-use-header" onclick="toggleCollapsible('${toolId}')">
+                <span class="collapse-icon" id="icon-${toolId}">▶</span>
+                <span class="tool-name">${escapeHtml(tool.name)}</span>
+                <span class="tool-summary">${escapeHtml(inputSummary)}</span>
+              </div>
+              <div class="tool-use-detail collapsible" id="${toolId}">
+                <pre class="tool-input-pre">${escapeHtml(inputDetail)}</pre>
+              </div>
+              ${resultHtml}
+            </div>
+          `;
+        }).join('');
+
+        toolUsesHtml = `<div class="tool-uses">${toolUsesHtml}</div>`;
       }
 
       return `
@@ -176,6 +265,7 @@ async function loadSessionDetails(sessionId, projectDir) {
             <div class="message-role ${msg.role}">${msg.role === 'user' ? 'You' : 'Claude'}</div>
             <div class="message-timestamp">${formatMessageTimestamp(msg.timestamp)}</div>
           </div>
+          ${thinkingHtml}
           <div class="message-content">
             ${contentHtml}
           </div>
@@ -198,6 +288,20 @@ function escapeHtml(text) {
   div.textContent = text;
   return div.innerHTML;
 }
+
+// Toggle collapsible sections
+function toggleCollapsible(id) {
+  const el = document.getElementById(id);
+  const icon = document.getElementById('icon-' + id);
+  if (el) {
+    const isHidden = el.style.display === 'none' || !el.style.display;
+    el.style.display = isHidden ? 'block' : 'none';
+    if (icon) icon.textContent = isHidden ? '▼' : '▶';
+  }
+}
+
+// Make it globally accessible for onclick handlers
+window.toggleCollapsible = toggleCollapsible;
 
 // Initialize on load
 window.addEventListener('DOMContentLoaded', () => {
